@@ -8,7 +8,9 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from train import iteration_no, total_iteration
+#from train import iteration_no, total_iteration
+
+from models.tracker import Tracker
 
 def positional_encoding(positions, freqs):
     
@@ -18,7 +20,7 @@ def positional_encoding(positions, freqs):
         pts = torch.cat([torch.sin(pts), torch.cos(pts)], dim=-1)
         return pts
 
-def get_freq_reg_mask(pos_enc_length, current_iter=iteration_no, total_reg_iter=total_iteration, max_visible=None, type='submission'):
+def get_freq_reg_mask(pos_enc_length, current_iter=0, total_reg_iter=0, max_visible=None, type='submission'):
   '''
   Returns a frequency mask for position encoding in NeRF.
   
@@ -158,7 +160,7 @@ class MLPRender_FRPE(torch.nn.Module):
 
         print("Using Frequency Regularisation")
 
-        self.in_mlpC = (3+2*viewpe*3)+ (3+2*pospe*3)  + inChanel #
+        self.in_mlpC = (3+2*viewpe*3)+ (2*pospe*3)  + inChanel #
         self.viewpe = viewpe
         self.pospe = pospe
         layer1 = torch.nn.Linear(self.in_mlpC, featureC)
@@ -172,11 +174,13 @@ class MLPRender_FRPE(torch.nn.Module):
         indata = [features, viewdirs]
         if self.pospe > 0:
             pospe_pos_encoding = positional_encoding(pts, self.pospe)
-            indata += [pospe_pos_encoding * get_freq_reg_mask(len(pospe_pos_encoding), iteration_no, total_iteration).unsqueeze(-1)]
+            #indata += [pospe_pos_encoding * get_freq_reg_mask(len(pospe_pos_encoding), iteration_no, total_iteration).unsqueeze(-1)]
+            indata += [pospe_pos_encoding * torch.from_numpy(np.array(get_freq_reg_mask(36, Tracker.get_iteration_no(), Tracker.get_total_iterations()))).to("cuda")]
         if self.viewpe > 0:
             #indata += [positional_encoding(viewdirs, self.viewpe)]
             viewpe_pos_encoding = positional_encoding(viewdirs, self.viewpe)
-            indata += [viewpe_pos_encoding * get_freq_reg_mask(len(viewpe_pos_encoding), iteration_no, total_iteration).unsqueeze(-1)]
+            #indata += [viewpe_pos_encoding * get_freq_reg_mask(len(viewpe_pos_encoding), iteration_no, total_iteration).unsqueeze(-1)]
+            indata += [viewpe_pos_encoding * torch.from_numpy(np.array(get_freq_reg_mask(36, Tracker.get_iteration_no(), Tracker.get_total_iterations()))).to("cuda")]
         mlp_in = torch.cat(indata, dim=-1)
         rgb = self.mlp(mlp_in)
         rgb = torch.sigmoid(rgb)

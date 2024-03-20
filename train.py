@@ -16,7 +16,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 renderer = OctreeRender_trilinear_fast
 
-global iteration_no, total_iteration
+#global iteration_no, total_iteration
+
+from models.tracker import Tracker
 
 class SimpleSampler:
     def __init__(self, total, batch):
@@ -171,11 +173,15 @@ def reconstruction(args):
 
     pbar = tqdm(range(args.n_iters), miniters=args.progress_refresh_rate, file=sys.stdout)
 
-    total_iteration = args.n_iters
+    # total_iteration = args.n_iters
+
+    Tracker.set_total_iteration = args.n_iters
 
     for iteration in pbar:
 
-        iteration_no = iteration
+        # iteration_no = iteration
+
+        Tracker.perform_step()
 
         ray_idx = trainingSampler.nextids()
         rays_train, rgb_train = allrays[ray_idx], allrgbs[ray_idx].to(device)

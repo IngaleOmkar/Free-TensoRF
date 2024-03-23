@@ -134,7 +134,8 @@ def reconstruction(args):
         tensorf = eval(args.model_name)(aabb, reso_cur, device,
                     density_n_comp=n_lamb_sigma, appearance_n_comp=n_lamb_sh, app_dim=args.data_dim_color, near_far=near_far,
                     shadingMode=args.shadingMode, alphaMask_thres=args.alpha_mask_thre, density_shift=args.density_shift, distance_scale=args.distance_scale,
-                    pos_pe=args.pos_pe, view_pe=args.view_pe, fea_pe=args.fea_pe, featureC=args.featureC, step_ratio=args.step_ratio, fea2denseAct=args.fea2denseAct)
+                    pos_pe=args.pos_pe, view_pe=args.view_pe, fea_pe=args.fea_pe, featureC=args.featureC, step_ratio=args.step_ratio, fea2denseAct=args.fea2denseAct,
+                    freq=args.freq)
 
 
     grad_vars = tensorf.get_optparam_groups(args.lr_init, args.lr_basis)
@@ -176,6 +177,8 @@ def reconstruction(args):
     # total_iteration = args.n_iters
 
     Tracker.set_total_iteration = args.n_iters
+
+    Tracker.reset_iteration_counter()
 
     for iteration in pbar:
 

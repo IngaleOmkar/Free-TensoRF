@@ -126,6 +126,34 @@ class MLPRender_Fea(torch.nn.Module):
 
         return rgb
 
+class MLPRender_FRFea(torch.nn.Module):
+    def __init__(self,inChanel, viewpe=6, feape=6, featureC=128):
+        super(MLPRender_Fea, self).__init__()
+
+        self.in_mlpC = 2*viewpe*3 + 2*feape*inChanel + 3 + inChanel
+        self.viewpe = viewpe
+        self.feape = feape
+        layer1 = torch.nn.Linear(self.in_mlpC, featureC)
+        layer2 = torch.nn.Linear(featureC, featureC)
+        layer3 = torch.nn.Linear(featureC,3)
+
+        self.mlp = torch.nn.Sequential(layer1, torch.nn.ReLU(inplace=True), layer2, torch.nn.ReLU(inplace=True), layer3)
+        torch.nn.init.constant_(self.mlp[-1].bias, 0)
+
+    def forward(self, pts, viewdirs, features):
+        indata = [features, viewdirs]
+        if self.feape > 0:
+            pospe_pos_encoding = [positional_encoding(features, self.feape)]
+            indata += [pospe_pos_encoding * torch.from_numpy(np.array(get_freq_reg_mask(36, Tracker.get_iteration_no(), Tracker.get_total_iterations()))).to("cuda")]
+        if self.viewpe > 0:
+            pospe_pos_encoding = [positional_encoding(viewdirs, self.viewpe)]
+            indata += [pospe_pos_encoding * torch.from_numpy(np.array(get_freq_reg_mask(36, Tracker.get_iteration_no(), Tracker.get_total_iterations()))).to("cuda")]
+        mlp_in = torch.cat(indata, dim=-1)
+        rgb = self.mlp(mlp_in)
+        rgb = torch.sigmoid(rgb)
+
+        return rgb
+
 class MLPRender_PE(torch.nn.Module):
     def __init__(self,inChanel, viewpe=6, pospe=6, featureC=128):
         super(MLPRender_PE, self).__init__()
@@ -210,6 +238,31 @@ class MLPRender(torch.nn.Module):
         rgb = torch.sigmoid(rgb)
 
         return rgb
+    
+class MLPRender_FR(torch.nn.Module):
+    def __init__(self,inChanel, viewpe=6, featureC=128):
+        super(MLPRender, self).__init__()
+
+        self.in_mlpC = (3+2*viewpe*3) + inChanel
+        self.viewpe = viewpe
+        
+        layer1 = torch.nn.Linear(self.in_mlpC, featureC)
+        layer2 = torch.nn.Linear(featureC, featureC)
+        layer3 = torch.nn.Linear(featureC,3)
+
+        self.mlp = torch.nn.Sequential(layer1, torch.nn.ReLU(inplace=True), layer2, torch.nn.ReLU(inplace=True), layer3)
+        torch.nn.init.constant_(self.mlp[-1].bias, 0)
+
+    def forward(self, pts, viewdirs, features):
+        indata = [features, viewdirs]
+        if self.viewpe > 0:
+            viewpe_pos_encoding = [positional_encoding(viewdirs, self.viewpe)]
+            indata += [viewpe_pos_encoding * torch.from_numpy(np.array(get_freq_reg_mask(36, Tracker.get_iteration_no(), Tracker.get_total_iterations()))).to("cuda")]
+        mlp_in = torch.cat(indata, dim=-1)
+        rgb = self.mlp(mlp_in)
+        rgb = torch.sigmoid(rgb)
+
+        return rgb
 
 
 
@@ -218,7 +271,7 @@ class TensorBase(torch.nn.Module):
                     shadingMode = 'MLP_PE', alphaMask = None, near_far=[2.0,6.0],
                     density_shift = -10, alphaMask_thres=0.001, distance_scale=25, rayMarch_weight_thres=0.0001,
                     pos_pe = 6, view_pe = 6, fea_pe = 6, featureC=128, step_ratio=2.0,
-                    fea2denseAct = 'softplus'):
+                    fea2denseAct = 'softplus', freq=0):
         super(TensorBase, self).__init__()
 
         self.density_n_comp = density_n_comp
@@ -248,24 +301,39 @@ class TensorBase(torch.nn.Module):
         self.init_svd_volume(gridSize[0], device)
 
         self.shadingMode, self.pos_pe, self.view_pe, self.fea_pe, self.featureC = shadingMode, pos_pe, view_pe, fea_pe, featureC
-        self.init_render_func(shadingMode, pos_pe, view_pe, fea_pe, featureC, device)
+        self.init_render_func(shadingMode, pos_pe, view_pe, fea_pe, featureC, device, freq)
 
-    def init_render_func(self, shadingMode, pos_pe, view_pe, fea_pe, featureC, device):
-        if shadingMode == 'MLP_PE':
-            #self.renderModule = MLPRender_PE(self.app_dim, view_pe, pos_pe, featureC).to(device)
-            self.renderModule = MLPRender_FRPE(self.app_dim, view_pe, pos_pe, featureC).to(device)
-        elif shadingMode == 'MLP_Fea':
-            self.renderModule = MLPRender_Fea(self.app_dim, view_pe, fea_pe, featureC).to(device)
-        elif shadingMode == 'MLP':
-            self.renderModule = MLPRender(self.app_dim, view_pe, featureC).to(device)
-        elif shadingMode == 'SH':
-            self.renderModule = SHRender
-        elif shadingMode == 'RGB':
-            assert self.app_dim == 3
-            self.renderModule = RGBRender
+    def init_render_func(self, shadingMode, pos_pe, view_pe, fea_pe, featureC, device, freq=0):
+        if freq == 0:
+            if shadingMode == 'MLP_PE':
+                self.renderModule = MLPRender_PE(self.app_dim, view_pe, pos_pe, featureC).to(device)
+            elif shadingMode == 'MLP_Fea':
+                self.renderModule = MLPRender_Fea(self.app_dim, view_pe, fea_pe, featureC).to(device)
+            elif shadingMode == 'MLP':
+                self.renderModule = MLPRender(self.app_dim, view_pe, featureC).to(device)
+            elif shadingMode == 'SH':
+                self.renderModule = SHRender
+            elif shadingMode == 'RGB':
+                assert self.app_dim == 3
+                self.renderModule = RGBRender
+            else:
+                print("Unrecognized shading module")
+                exit()
         else:
-            print("Unrecognized shading module")
-            exit()
+            if shadingMode == 'MLP_PE':
+                self.renderModule = MLPRender_FRPE(self.app_dim, view_pe, pos_pe, featureC).to(device)
+            elif shadingMode == 'MLP_Fea':
+                self.renderModule = MLPRender_Fea(self.app_dim, view_pe, fea_pe, featureC).to(device)
+            elif shadingMode == 'MLP':
+                self.renderModule = MLPRender(self.app_dim, view_pe, featureC).to(device)
+            elif shadingMode == 'SH':
+                self.renderModule = SHRender
+            elif shadingMode == 'RGB':
+                assert self.app_dim == 3
+                self.renderModule = RGBRender
+            else:
+                print("Unrecognized shading module")
+                exit()
         print("pos_pe", pos_pe, "view_pe", view_pe, "fea_pe", fea_pe)
         print(self.renderModule)
 

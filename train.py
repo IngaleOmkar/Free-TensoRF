@@ -12,6 +12,8 @@ import datetime
 from dataLoader import dataset_dict
 import sys
 
+import pandas
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 renderer = OctreeRender_trilinear_fast
@@ -285,6 +287,10 @@ def reconstruction(args):
         
 
     tensorf.save(f'{logfolder}/{args.expname}.th')
+
+    df = pandas.DataFrame(data={"psnr": PSNRs})
+    #Change name in colab based on experiment
+    df.to_csv("./mlp_frpe_flower_10k.csv", sep=',',index=False)
 
 
     if args.render_train:

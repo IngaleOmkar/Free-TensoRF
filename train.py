@@ -158,6 +158,7 @@ def reconstruction(args):
 
     torch.cuda.empty_cache()
     PSNRs,PSNRs_test = [],[0]
+    all_psnrs = []
 
     allrays, allrgbs = train_dataset.all_rays, train_dataset.all_rgbs
     if not args.ndc_ray:
@@ -243,6 +244,8 @@ def reconstruction(args):
                 + f' test_psnr = {float(np.mean(PSNRs_test)):.2f}'
                 + f' mse = {loss:.6f}'
             )
+            # keep track of all psnrs
+            all_psnrs += PSNRs
             PSNRs = []
 
 
@@ -288,7 +291,7 @@ def reconstruction(args):
 
     tensorf.save(f'{logfolder}/{args.expname}.th')
 
-    df = pandas.DataFrame(data={"psnr": PSNRs})
+    df = pandas.DataFrame(data={"psnr": all_psnrs})
     #Change name in colab based on experiment
     df.to_csv("./mlp_frpe_flower_10k.csv", sep=',',index=False)
 

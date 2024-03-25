@@ -47,11 +47,11 @@ This assumes that you have added the data from the dataset in your google drive.
 
 For convience, you can add the shortcut to your Colab Notebooks directory in Drive. All the notebooks in this project assume that location for data directory. Change as necessary.
 
-'''
+```
 .../Colab Notebooks/nerf__llff_data/flower
-'''
+```
 
 To run, you can use:
-'''python
+```python
 python train.py --config path/to/your/config --ckpt path/to/your/log/folder --freq 1 --shadingMode "MLP_PE"
-'''
+```
